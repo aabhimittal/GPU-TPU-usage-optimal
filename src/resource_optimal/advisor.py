@@ -113,12 +113,21 @@ class OptimalAdvisor:
         ram_capacity: float,
         gpu_usage: Optional[Sequence[float]] = None,
         gpu_capacity: Optional[float] = None,
+        tpu_usage: Optional[Sequence[float]] = None,
+        tpu_capacity: Optional[float] = None,
+        npu_usage: Optional[Sequence[float]] = None,
+        npu_capacity: Optional[float] = None,
         horizon: int = 1,
     ) -> List[Recommendation]:
-        """Recommend for RAM and (when data is present) GPU memory."""
+        """Recommend for RAM and any accelerator with usage + capacity data."""
         recs: List[Recommendation] = []
         if ram_usage:
             recs.append(self.recommend("RAM", ram_usage, ram_capacity, horizon))
-        if gpu_usage and gpu_capacity:
-            recs.append(self.recommend("GPU", gpu_usage, gpu_capacity, horizon))
+        for label, usage, cap in (
+            ("GPU", gpu_usage, gpu_capacity),
+            ("TPU", tpu_usage, tpu_capacity),
+            ("NPU", npu_usage, npu_capacity),
+        ):
+            if usage and cap:
+                recs.append(self.recommend(label, usage, cap, horizon))
         return recs

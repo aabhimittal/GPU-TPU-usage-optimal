@@ -11,6 +11,8 @@ import time
 from dataclasses import dataclass, asdict
 from typing import Optional, List, Dict, Any
 
+from .backends import AcceleratorBackend, NpuBackend, TpuBackend
+
 # ---- optional back-ends -------------------------------------------------
 try:  # GPU metrics
     import pynvml  # type: ignore
@@ -46,6 +48,14 @@ class Sample:
     gpu_total_mb: Optional[float] = None
     gpu_percent: Optional[float] = None
     gpu_util: Optional[float] = None
+    tpu_used_mb: Optional[float] = None
+    tpu_total_mb: Optional[float] = None
+    tpu_percent: Optional[float] = None
+    tpu_util: Optional[float] = None
+    npu_used_mb: Optional[float] = None
+    npu_total_mb: Optional[float] = None
+    npu_percent: Optional[float] = None
+    npu_util: Optional[float] = None
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -56,12 +66,24 @@ class ResourceCollector:
 
     Parameters
     ----------
-    gpu_index:
-        Index of the GPU to monitor when several are present.
+    gpu_index, tpu_index, npu_index:
+        Device indices to monitor when several of a kind are present.
+    tpu_backend, npu_backend:
+        Optional back-end overrides (mainly for testing / custom hardware).
+        When omitted the default best-effort back-ends are probed.
     """
 
-    def __init__(self, gpu_index: int = 0) -> None:
+    def __init__(
+        self,
+        gpu_index: int = 0,
+        tpu_index: int = 0,
+        npu_index: int = 0,
+        tpu_backend: Optional[AcceleratorBackend] = None,
+        npu_backend: Optional[AcceleratorBackend] = None,
+    ) -> None:
         self.gpu_index = gpu_index
+        self.tpu_index = tpu_index
+        self.npu_index = npu_index
         self._nvml_ready = False
         self._handle = None
         if _NVML_OK:
@@ -71,6 +93,8 @@ class ResourceCollector:
                 self._nvml_ready = True
             except Exception:  # pragma: no cover - no GPU present
                 self._nvml_ready = False
+        self.tpu = tpu_backend if tpu_backend is not None else TpuBackend()
+        self.npu = npu_backend if npu_backend is not None else NpuBackend()
 
     # -- capability flags -------------------------------------------------
     @property
@@ -80,6 +104,14 @@ class ResourceCollector:
     @property
     def ram_available(self) -> bool:
         return _PSUTIL_OK
+
+    @property
+    def tpu_available(self) -> bool:
+        return bool(self.tpu and self.tpu.available)
+
+    @property
+    def npu_available(self) -> bool:
+        return bool(self.npu and self.npu.available)
 
     # -- sampling ---------------------------------------------------------
     def _sample_ram(self, s: Sample) -> None:
@@ -105,11 +137,25 @@ class ResourceCollector:
         except Exception:  # pragma: no cover - transient NVML errors
             pass
 
+    def _sample_accelerator(self, s: Sample, backend: Optional[AcceleratorBackend],
+                            index: int, prefix: str) -> None:
+        if not backend or not backend.available:
+            return
+        reading = backend.read(index)
+        if reading is None:
+            return
+        setattr(s, f"{prefix}_used_mb", reading.used_mb)
+        setattr(s, f"{prefix}_total_mb", reading.total_mb)
+        setattr(s, f"{prefix}_percent", reading.percent)
+        setattr(s, f"{prefix}_util", reading.util)
+
     def sample(self) -> Sample:
         """Return one snapshot of current usage."""
         s = Sample(ts=time.time())
         self._sample_ram(s)
         self._sample_gpu(s)
+        self._sample_accelerator(s, self.tpu, self.tpu_index, "tpu")
+        self._sample_accelerator(s, self.npu, self.npu_index, "npu")
         return s
 
     def collect(self, n: int, interval: float = 1.0) -> List[Sample]:

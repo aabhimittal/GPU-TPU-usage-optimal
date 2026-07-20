@@ -17,6 +17,14 @@ _COLUMNS = (
     "gpu_total_mb",
     "gpu_percent",
     "gpu_util",
+    "tpu_used_mb",
+    "tpu_total_mb",
+    "tpu_percent",
+    "tpu_util",
+    "npu_used_mb",
+    "npu_total_mb",
+    "npu_percent",
+    "npu_util",
 )
 
 
@@ -38,6 +46,13 @@ class TimeSeriesStore:
     def _init_schema(self) -> None:
         cols = ", ".join(f"{c} REAL" for c in _COLUMNS)
         self._conn.execute(f"CREATE TABLE IF NOT EXISTS samples ({cols})")
+        # migrate older databases that predate the TPU/NPU columns
+        existing = {
+            row[1] for row in self._conn.execute("PRAGMA table_info(samples)")
+        }
+        for c in _COLUMNS:
+            if c not in existing:
+                self._conn.execute(f"ALTER TABLE samples ADD COLUMN {c} REAL")
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_samples_ts ON samples(ts)"
         )

@@ -49,17 +49,23 @@ def render_dashboard(
     gpu_series: Optional[Sequence[float]] = None,
     gpu_pct: Optional[float] = None,
     recs: Optional[Sequence[Recommendation]] = None,
+    tpu_series: Optional[Sequence[float]] = None,
+    tpu_pct: Optional[float] = None,
+    npu_series: Optional[Sequence[float]] = None,
+    npu_pct: Optional[float] = None,
 ) -> str:
     """Return a compact multi-line dashboard string for the terminal."""
     lines = ["── resource-optimal ──────────────────"]
-    if ram_series:
-        lines.append(f"RAM  {sparkline(ram_series)}")
-    if ram_pct is not None:
-        lines.append(f"     {_bar(ram_pct)}")
-    if gpu_series:
-        lines.append(f"GPU  {sparkline(gpu_series)}")
-    if gpu_pct is not None:
-        lines.append(f"     {_bar(gpu_pct)}")
+    for label, series, pct in (
+        ("RAM", ram_series, ram_pct),
+        ("GPU", gpu_series, gpu_pct),
+        ("TPU", tpu_series, tpu_pct),
+        ("NPU", npu_series, npu_pct),
+    ):
+        if series:
+            lines.append(f"{label}  {sparkline(series)}")
+        if pct is not None:
+            lines.append(f"     {_bar(pct)}")
     for r in recs or []:
         lines.append(f"→ {r.resource}: {r.message}")
     return "\n".join(lines)

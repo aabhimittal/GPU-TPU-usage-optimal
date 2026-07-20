@@ -21,6 +21,10 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="SQLite path for history (default: in-memory)")
     p.add_argument("--gpu-index", type=int, default=0,
                    help="GPU index to monitor (default: 0)")
+    p.add_argument("--tpu-index", type=int, default=0,
+                   help="TPU index to monitor (default: 0)")
+    p.add_argument("--npu-index", type=int, default=0,
+                   help="NPU index to monitor (default: 0)")
     p.add_argument("--horizon", type=int, default=5,
                    help="forecast horizon in steps (default: 5)")
     p.add_argument("--live", action="store_true",
@@ -32,10 +36,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = _build_parser().parse_args(argv)
-    with ResourceMonitor(db_path=args.db, gpu_index=args.gpu_index) as mon:
-        if not (mon.collector.ram_available or mon.collector.gpu_available):
-            print("warning: no psutil/pynvml back-end available; "
-                  "install 'psutil' and/or 'pynvml' for real metrics.",
+    with ResourceMonitor(
+        db_path=args.db,
+        gpu_index=args.gpu_index,
+        tpu_index=args.tpu_index,
+        npu_index=args.npu_index,
+    ) as mon:
+        c = mon.collector
+        if not (c.ram_available or c.gpu_available or c.tpu_available
+                or c.npu_available):
+            print("warning: no back-end available; install 'psutil' (RAM), "
+                  "'nvidia-ml-py' (GPU), 'tpu-info'/JAX (TPU) or Ascend "
+                  "'npu-smi' (NPU) for real metrics.",
                   file=sys.stderr)
         recs = mon.run(args.samples, interval=args.interval, live=args.live)
         print("\n" + mon.dashboard())

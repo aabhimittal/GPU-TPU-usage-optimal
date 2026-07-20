@@ -1,9 +1,9 @@
 # GPU / RAM usage-optimal
 
-A lightweight Python resource **tracker + advisor**: it samples GPU and RAM
-usage, stores the time series, forecasts near-future demand with a small online
-model, and recommends an *optimal* resource budget for running intensive tasks —
-all with an efficient, zero-dependency terminal visualisation.
+A lightweight Python resource **tracker + advisor**: it samples GPU, TPU, NPU
+and RAM usage, stores the time series, forecasts near-future demand with a small
+online model, and recommends an *optimal* resource budget for running intensive
+tasks — all with an efficient, zero-dependency terminal visualisation.
 
 ## The novel idea
 
@@ -30,6 +30,23 @@ pip install -e ".[all]"     # real metrics + plots + ML model
 
 Optional extras: `metrics` (psutil + NVML), `viz` (matplotlib), `ml`
 (scikit-learn). The core runs and is fully tested without any of them.
+
+### Accelerator back-ends
+
+| Accelerator | Source tried | Install |
+| --- | --- | --- |
+| **GPU** (NVIDIA) | NVML via `nvidia-ml-py` | `pip install nvidia-ml-py` |
+| **TPU** (Google) | `tpu-info` package, else JAX `memory_stats()` | `pip install tpu-info` |
+| **NPU** | Huawei Ascend `npu-smi info`, else OpenVINO presence | vendor toolkit on `PATH` |
+
+Back-ends probe safely and report *unavailable* when the hardware or tooling is
+missing. You can also inject your own — anything satisfying `AcceleratorBackend`
+(an `available` flag + `read(index) -> AcceleratorReading`):
+
+```python
+from resource_optimal import ResourceCollector
+collector = ResourceCollector(tpu_backend=MyTpuBackend(), npu_backend=MyNpuBackend())
+```
 
 ## Quick start
 
@@ -61,7 +78,8 @@ python examples/demo.py
 
 | Module | Role |
 | --- | --- |
-| `collector` | Samples RAM (psutil) and GPU (NVML); degrades to `None` when absent |
+| `collector` | Samples RAM (psutil), GPU (NVML), TPU and NPU; degrades to `None` when a back-end is absent |
+| `backends` | Pluggable TPU (`tpu-info`/JAX) and NPU (Ascend `npu-smi`/OpenVINO) readers; injectable for custom hardware |
 | `storage` | SQLite time-series store of samples |
 | `forecaster` | Holt's linear smoother (pure Python) + optional ridge AR model |
 | `advisor` | Demand-band → optimal reserve + status (`ok`/`tight`/`over_capacity`/`over_provisioned`) |
