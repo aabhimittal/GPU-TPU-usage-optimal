@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resource-optimal"
+version = "0.1.0"
+description = "Track, visualise and optimise GPU/RAM usage with online forecasting."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Abhishek Mittal" }]
+keywords = ["gpu", "ram", "monitoring", "forecasting", "resource-management"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: System :: Monitoring",
+]
+dependencies = []
+
+[project.optional-dependencies]
+metrics = ["psutil>=5.9", "nvidia-ml-py>=12.0"]
+viz = ["matplotlib>=3.5"]
+ml = ["scikit-learn>=1.0"]
+all = ["psutil>=5.9", "nvidia-ml-py>=12.0", "matplotlib>=3.5", "scikit-learn>=1.0"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+resource-optimal = "resource_optimal.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/aabhimittal/gpu-tpu-usage-optimal"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
