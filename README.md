@@ -1,5 +1,7 @@
 # GPU / RAM usage-optimal
 
+[![CI](https://github.com/aabhimittal/GPU-TPU-usage-optimal/actions/workflows/ci.yml/badge.svg)](https://github.com/aabhimittal/GPU-TPU-usage-optimal/actions/workflows/ci.yml)
+
 A lightweight Python resource **tracker + advisor**: it samples GPU, TPU, NPU
 and RAM usage, stores the time series, forecasts near-future demand with a small
 online model, and recommends an *optimal* resource budget for running intensive
@@ -37,11 +39,14 @@ Optional extras: `metrics` (psutil + NVML), `viz` (matplotlib), `ml`
 | --- | --- | --- |
 | **GPU** (NVIDIA) | NVML via `nvidia-ml-py` | `pip install nvidia-ml-py` |
 | **TPU** (Google) | `tpu-info` package, else JAX `memory_stats()` | `pip install tpu-info` |
-| **NPU** | Huawei Ascend `npu-smi info`, else OpenVINO presence | vendor toolkit on `PATH` |
+| **NPU** | Huawei Ascend `npu-smi info`, else OpenVINO device memory (Intel NPU) | vendor toolkit on `PATH`, or `pip install openvino` |
 
 Back-ends probe safely and report *unavailable* when the hardware or tooling is
-missing. You can also inject your own — anything satisfying `AcceleratorBackend`
-(an `available` flag + `read(index) -> AcceleratorReading`):
+missing. The OpenVINO NPU path reads total device memory from the plugin's
+device properties, plus allocated memory when the plugin exposes it (some builds
+report only total, in which case utilisation is left blank). You can also inject
+your own — anything satisfying `AcceleratorBackend` (an `available` flag +
+`read(index) -> AcceleratorReading`):
 
 ```python
 from resource_optimal import ResourceCollector

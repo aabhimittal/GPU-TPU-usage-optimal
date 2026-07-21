@@ -15,7 +15,7 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
-from typing import Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 
 @dataclass
@@ -141,27 +141,45 @@ class NpuBackend:
 
     1. Huawei Ascend ``npu-smi info`` CLI, parsed for HBM/DDR usage and AI-Core
        utilisation (the most common NPU tooling on Linux).
-    2. Intel NPU exposed via ``openvino`` device properties, when present.
+    2. Intel NPU exposed via ``openvino``: total (and, when the plugin reports
+       it, allocated) device memory read through OpenVINO device properties.
 
     Falls back to *unavailable* if neither is found.
     """
 
     name = "npu"
+    _OV_DEVICE = "NPU"
+    # OpenVINO property keys carrying device memory in bytes. Names have varied
+    # across releases, so several candidates are tried in order.
+    _OV_TOTAL_KEYS = ("NPU_DEVICE_TOTAL_MEM_SIZE", "DEVICE_TOTAL_MEM_SIZE",
+                      "GPU_DEVICE_TOTAL_MEM_SIZE")
+    _OV_USED_KEYS = ("NPU_DEVICE_ALLOC_MEM_SIZE", "DEVICE_ALLOCATED_MEM_SIZE",
+                     "DEVICE_USED_MEM_SIZE")
 
     def __init__(self) -> None:
         self._mode: Optional[str] = None
+        self._ov_core: Optional[Any] = None
         self._probe()
 
     def _probe(self) -> None:
         if shutil.which("npu-smi"):
             self._mode = "ascend"
             return
-        try:
-            import openvino  # type: ignore  # noqa: F401
-
+        core = self._make_openvino_core()
+        if core is not None and self._OV_DEVICE in getattr(
+            core, "available_devices", []
+        ):
+            self._ov_core = core
             self._mode = "openvino"
+
+    @staticmethod
+    def _make_openvino_core() -> Optional[Any]:
+        try:  # pragma: no cover - requires openvino installed
+            import openvino as ov  # type: ignore
+
+            return ov.Core()
         except Exception:
-            self._mode = None
+            return None
 
     @property
     def available(self) -> bool:
@@ -210,6 +228,41 @@ class NpuBackend:
         return AcceleratorReading(used_mb=used, total_mb=total, util=util)
 
     def _read_openvino(self, index: int) -> Optional[AcceleratorReading]:
-        # OpenVINO does not expose live NPU memory counters in a stable API;
-        # presence is detected but per-sample metrics are left to Ascend.
-        return None  # pragma: no cover
+        if self._ov_core is None:
+            return None
+        return self._query_openvino(self._ov_core, self._OV_DEVICE)
+
+    @classmethod
+    def _query_openvino(cls, core: Any, device: str = "NPU"
+                        ) -> Optional[AcceleratorReading]:
+        """Build a reading from an OpenVINO ``Core``'s device properties.
+
+        ``core`` only needs a ``get_property(device, key)`` method, which keeps
+        this unit-testable without OpenVINO or NPU hardware. Total memory is
+        always attempted; ``used`` is filled only when the plugin exposes an
+        allocated-memory property (many builds do not), leaving ``percent`` at
+        ``None`` in that case.
+        """
+        total = cls._first_prop_bytes(core, device, cls._OV_TOTAL_KEYS)
+        used = cls._first_prop_bytes(core, device, cls._OV_USED_KEYS)
+        if total is None and used is None:
+            return None
+        to_mb = lambda b: b / 1024 / 1024 if b is not None else None
+        return AcceleratorReading(used_mb=to_mb(used), total_mb=to_mb(total),
+                                  util=None)
+
+    @staticmethod
+    def _first_prop_bytes(core: Any, device: str, keys) -> Optional[float]:
+        """Return the first property in ``keys`` that yields a positive number."""
+        for key in keys:
+            try:
+                val = core.get_property(device, key)
+            except Exception:
+                continue
+            try:
+                num = float(val)
+            except (TypeError, ValueError):
+                continue
+            if num > 0:
+                return num
+        return None
