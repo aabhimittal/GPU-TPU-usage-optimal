@@ -54,6 +54,53 @@ def test_ascend_parser_returns_none_on_garbage():
     assert NpuBackend._parse_ascend("no useful metrics here") is None
 
 
+# ---- OpenVINO NPU memory path -------------------------------------------
+class FakeCore:
+    """Minimal stand-in for openvino.Core exposing get_property."""
+
+    def __init__(self, props, devices=("NPU",)):
+        self._props = props
+        self.available_devices = list(devices)
+
+    def get_property(self, device, key):
+        if device == "NPU" and key in self._props:
+            return self._props[key]
+        raise RuntimeError(f"unknown property {key}")
+
+
+def test_openvino_reports_total_and_used():
+    core = FakeCore({
+        "NPU_DEVICE_TOTAL_MEM_SIZE": 8 * 1024 * 1024 * 1024,   # 8 GiB
+        "NPU_DEVICE_ALLOC_MEM_SIZE": 2 * 1024 * 1024 * 1024,   # 2 GiB
+    })
+    r = NpuBackend._query_openvino(core)
+    assert r is not None
+    assert round(r.total_mb) == 8192 and round(r.used_mb) == 2048
+    assert round(r.percent) == 25
+
+
+def test_openvino_total_only_leaves_percent_none():
+    core = FakeCore({"DEVICE_TOTAL_MEM_SIZE": 4 * 1024 * 1024 * 1024})
+    r = NpuBackend._query_openvino(core)
+    assert r is not None
+    assert round(r.total_mb) == 4096
+    assert r.used_mb is None and r.percent is None
+
+
+def test_openvino_no_memory_props_returns_none():
+    assert NpuBackend._query_openvino(FakeCore({})) is None
+
+
+def test_openvino_first_prop_skips_bad_values():
+    core = FakeCore({
+        "NPU_DEVICE_TOTAL_MEM_SIZE": "not-a-number",
+        "DEVICE_TOTAL_MEM_SIZE": 0,               # non-positive, skipped
+        "GPU_DEVICE_TOTAL_MEM_SIZE": 1024 * 1024,  # 1 MiB, first valid
+    })
+    got = NpuBackend._first_prop_bytes(core, "NPU", NpuBackend._OV_TOTAL_KEYS)
+    assert got == 1024 * 1024
+
+
 # ---- collector integration with injected back-ends ----------------------
 def test_collector_samples_injected_tpu_and_npu():
     tpu = FakeBackend("tpu", AcceleratorReading(used_mb=8000, total_mb=16000, util=70))
