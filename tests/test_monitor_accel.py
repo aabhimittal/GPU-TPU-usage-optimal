@@ -2,8 +2,9 @@
 from resource_optimal.advisor import OptimalAdvisor
 from resource_optimal.backends import AcceleratorReading
 from resource_optimal.collector import ResourceCollector
+from helpers import FakeBackend
+
 from resource_optimal.monitor import ResourceMonitor
-from tests.test_backends import FakeBackend
 
 
 def _monitor_with_accels():

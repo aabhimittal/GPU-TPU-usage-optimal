@@ -1,22 +1,8 @@
 """Tests for TPU/NPU back-ends and their integration through the collector."""
+from helpers import FakeBackend
+
 from resource_optimal.backends import AcceleratorReading, NpuBackend, TpuBackend
 from resource_optimal.collector import ResourceCollector
-
-
-class FakeBackend:
-    """Injectable accelerator back-end returning a fixed reading."""
-
-    def __init__(self, name, reading, available=True):
-        self.name = name
-        self._reading = reading
-        self._available = available
-
-    @property
-    def available(self):
-        return self._available
-
-    def read(self, index=0):
-        return self._reading
 
 
 # ---- AcceleratorReading -------------------------------------------------

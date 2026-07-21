@@ -36,3 +36,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Make imports work whether or not the package is installed, and regardless of
+# how pytest is invoked (bare `pytest` vs `python -m pytest`):
+#   - "src"   -> the resource_optimal package
+#   - "tests" -> shared helpers (tests/helpers.py)
+pythonpath = ["src", "tests"]
